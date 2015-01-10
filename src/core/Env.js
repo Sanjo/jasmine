@@ -9,8 +9,8 @@ getJasmineRequireObj().Env = function(j$) {
 
     var catchExceptions = true;
 
-    var realSetTimeout = j$.getGlobal().setTimeout;
-    var realClearTimeout = j$.getGlobal().clearTimeout;
+    var realSetTimeout = options.setTimeout || j$.getGlobal().setTimeout;
+    var realClearTimeout = options.clearTimeout || j$.getGlobal().clearTimeout;
     this.clock = new j$.Clock(global, new j$.DelayedFunctionScheduler(), new j$.MockDate(global));
 
     var runnableLookupTable = {};
