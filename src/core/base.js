@@ -37,12 +37,28 @@ getJasmineRequireObj().base = function(j$, jasmineGlobal) {
     return obj.nodeType > 0;
   };
 
+  j$.fnNameFor = function(func) {
+    return func.name || func.toString().match(/^\s*function\s*(\w*)\s*\(/)[1];
+  };
+
   j$.any = function(clazz) {
     return new j$.Any(clazz);
   };
 
+  j$.anything = function() {
+    return new j$.Anything();
+  };
+
   j$.objectContaining = function(sample) {
     return new j$.ObjectContaining(sample);
+  };
+
+  j$.stringMatching = function(expected) {
+    return new j$.StringMatching(expected);
+  };
+
+  j$.arrayContaining = function(sample) {
+    return new j$.ArrayContaining(sample);
   };
 
   j$.createSpy = function(name, originalFn) {
@@ -89,6 +105,11 @@ getJasmineRequireObj().base = function(j$, jasmineGlobal) {
   };
 
   j$.createSpyObj = function(baseName, methodNames) {
+    if (j$.isArray_(baseName) && j$.util.isUndefined(methodNames)) {
+      methodNames = baseName;
+      baseName = 'unknown';
+    }
+
     if (!j$.isArray_(methodNames) || methodNames.length === 0) {
       throw 'createSpyObj requires a non-empty array of method names to create spies for';
     }

@@ -93,17 +93,36 @@ getJasmineRequireObj().pp = function(j$) {
     if(array.length > length){
       this.append(', ...');
     }
+
+    var self = this;
+    var first = array.length === 0;
+    this.iterateObject(array, function(property, isGetter) {
+      if (property.match(/^\d+$/)) {
+        return;
+      }
+
+      if (first) {
+        first = false;
+      } else {
+        self.append(', ');
+      }
+
+      self.formatProperty(array, property, isGetter);
+    });
+
     this.append(' ]');
   };
 
   StringPrettyPrinter.prototype.emitObject = function(obj) {
+    var constructorName = obj.constructor ? j$.fnNameFor(obj.constructor) : 'null';
+    this.append(constructorName);
+
     if (this.ppNestLevel_ > j$.MAX_PRETTY_PRINT_DEPTH) {
-      this.append('Object');
       return;
     }
 
     var self = this;
-    this.append('{ ');
+    this.append('({ ');
     var first = true;
 
     this.iterateObject(obj, function(property, isGetter) {
@@ -113,16 +132,20 @@ getJasmineRequireObj().pp = function(j$) {
         self.append(', ');
       }
 
-      self.append(property);
-      self.append(': ');
-      if (isGetter) {
-        self.append('<getter>');
-      } else {
-        self.format(obj[property]);
-      }
+      self.formatProperty(obj, property, isGetter);
     });
 
-    this.append(' }');
+    this.append(' })');
+  };
+
+  StringPrettyPrinter.prototype.formatProperty = function(obj, property, isGetter) {
+      this.append(property);
+      this.append(': ');
+      if (isGetter) {
+        this.append('<getter>');
+      } else {
+        this.format(obj[property]);
+      }
   };
 
   StringPrettyPrinter.prototype.append = function(value) {

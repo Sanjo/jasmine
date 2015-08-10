@@ -17,7 +17,7 @@ getJasmineRequireObj().QueueRunner = function(j$) {
     this.onException = attrs.onException || function() {};
     this.catchException = attrs.catchException || function() { return true; };
     this.userContext = attrs.userContext || {};
-    this.timer = attrs.timer || {setTimeout: setTimeout, clearTimeout: clearTimeout};
+    this.timeout = attrs.timeout || {setTimeout: setTimeout, clearTimeout: clearTimeout};
     this.fail = attrs.fail || function() {};
   }
 
@@ -34,7 +34,8 @@ getJasmineRequireObj().QueueRunner = function(j$) {
     for(iterativeIndex = recursiveIndex; iterativeIndex < length; iterativeIndex++) {
       var queueableFn = queueableFns[iterativeIndex];
       if (queueableFn.fn.length > 0) {
-        return attemptAsync(queueableFn);
+        attemptAsync(queueableFn);
+        return;
       } else {
         attemptSync(queueableFn);
       }
@@ -56,7 +57,7 @@ getJasmineRequireObj().QueueRunner = function(j$) {
 
     function attemptAsync(queueableFn) {
       var clearTimeout = function () {
-          Function.prototype.apply.apply(self.timer.clearTimeout, [j$.getGlobal(), [timeoutId]]);
+          Function.prototype.apply.apply(self.timeout.clearTimeout, [j$.getGlobal(), [timeoutId]]);
         },
         next = once(function () {
           clearTimeout(timeoutId);
@@ -70,7 +71,7 @@ getJasmineRequireObj().QueueRunner = function(j$) {
       };
 
       if (queueableFn.timeout) {
-        timeoutId = Function.prototype.apply.apply(self.timer.setTimeout, [j$.getGlobal(), [function() {
+        timeoutId = Function.prototype.apply.apply(self.timeout.setTimeout, [j$.getGlobal(), [function() {
           var error = new Error('Timeout - Async callback was not invoked within timeout specified by jasmine.DEFAULT_TIMEOUT_INTERVAL.');
           onException(error, queueableFn);
           next();

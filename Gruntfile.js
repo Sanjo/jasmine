@@ -17,7 +17,6 @@ module.exports = function(grunt) {
   grunt.registerTask('default', ['jshint:all']);
 
   var version = require('./grunt/tasks/version.js');
-  var standaloneBuilder = require('./grunt/tasks/build_standalone.js');
 
   grunt.registerTask('build:copyVersionToGem',
     "Propagates the version from package.json to version.rb",
@@ -43,10 +42,8 @@ module.exports = function(grunt) {
           jasmine = new Jasmine({jasmineCore: jasmineCore});
 
       jasmine.loadConfigFile('./spec/support/jasmine.json');
-      jasmine.configureDefaultReporter({
-        onComplete: function(passed) {
-          done(passed);
-        }
+      jasmine.onComplete(function(passed) {
+        done(passed);
       });
 
       jasmine.execute();

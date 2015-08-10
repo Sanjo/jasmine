@@ -266,7 +266,7 @@ describe("New HtmlReporter", function() {
       timer.elapsed.and.returnValue(100);
       reporter.jasmineDone();
 
-      var duration = container.querySelector(".banner .duration");
+      var duration = container.querySelector(".alert .duration");
       expect(duration.innerHTML).toMatch(/finished in 0.1s/);
     });
 
@@ -278,7 +278,8 @@ describe("New HtmlReporter", function() {
           env: env,
           getContainer: getContainer,
           createElement: function() { return document.createElement.apply(document, arguments); },
-          createTextNode: function() { return document.createTextNode.apply(document, arguments); }
+          createTextNode: function() { return document.createTextNode.apply(document, arguments); },
+          addToExistingQueryString: function(key, value) { return "?foo=bar&" + key + "=" + value; }
         });
       reporter.initialize();
 
@@ -350,7 +351,7 @@ describe("New HtmlReporter", function() {
       var suiteDetail = outerSuite.childNodes[0];
       var suiteLink = suiteDetail.childNodes[0];
       expect(suiteLink.innerHTML).toEqual("A Suite");
-      expect(suiteLink.getAttribute('href')).toEqual("?spec=A%20Suite");
+      expect(suiteLink.getAttribute('href')).toEqual("?foo=bar&spec=A Suite");
 
       var specs = outerSuite.childNodes[1];
       var spec = specs.childNodes[0];
@@ -359,8 +360,42 @@ describe("New HtmlReporter", function() {
 
       var specLink = spec.childNodes[0];
       expect(specLink.innerHTML).toEqual("with a spec");
-      expect(specLink.getAttribute("href")).toEqual("?spec=A%20Suite%20with%20a%20spec");
+      expect(specLink.getAttribute("href")).toEqual("?foo=bar&spec=A Suite with a spec");
 //      expect(specLink.getAttribute("title")).toEqual("A Suite with a spec");
+    });
+
+    it("has an options menu", function() {
+      var env = new j$.Env(),
+        container = document.createElement("div"),
+        getContainer = function() {
+          return container;
+        },
+        reporter = new j$.HtmlReporter({
+          env: env,
+          getContainer: getContainer,
+          createElement: function() {
+            return document.createElement.apply(document, arguments);
+          },
+          createTextNode: function() {
+            return document.createTextNode.apply(document, arguments);
+          }
+        });
+
+      reporter.initialize();
+      reporter.jasmineDone({});
+
+      var trigger = container.querySelector('.run-options .trigger'),
+          payload = container.querySelector('.run-options .payload');
+
+      expect(payload.className).not.toContain('open');
+
+      trigger.onclick();
+
+      expect(payload.className).toContain('open');
+
+      trigger.onclick();
+
+      expect(payload.className).not.toContain('open');
     });
 
     describe("UI for raising/catching exceptions", function() {
@@ -438,6 +473,86 @@ describe("New HtmlReporter", function() {
         var input = container.querySelector(".raise");
         input.click();
         expect(exceptionsClickHandler).toHaveBeenCalled();
+      });
+    });
+
+    describe("UI for throwing errors on expectation failures", function() {
+      it("should be unchecked if not throwing", function() {
+        var env = new j$.Env(),
+          container = document.createElement("div"),
+          getContainer = function() {
+            return container;
+          },
+          reporter = new j$.HtmlReporter({
+            env: env,
+            getContainer: getContainer,
+            createElement: function() {
+              return document.createElement.apply(document, arguments);
+            },
+            createTextNode: function() {
+              return document.createTextNode.apply(document, arguments);
+            }
+          });
+
+        reporter.initialize();
+        reporter.jasmineDone({});
+
+        var throwingExpectationsUI = container.querySelector(".throw");
+        expect(throwingExpectationsUI.checked).toBe(false);
+      });
+
+      it("should be checked if throwing", function() {
+        var env = new j$.Env(),
+          container = document.createElement("div"),
+          getContainer = function() {
+            return container;
+          },
+          reporter = new j$.HtmlReporter({
+            env: env,
+            getContainer: getContainer,
+            createElement: function() {
+              return document.createElement.apply(document, arguments);
+            },
+            createTextNode: function() {
+              return document.createTextNode.apply(document, arguments);
+            }
+          });
+
+        env.throwOnExpectationFailure(true);
+
+        reporter.initialize();
+        reporter.jasmineDone({});
+
+        var throwingExpectationsUI = container.querySelector(".throw");
+        expect(throwingExpectationsUI.checked).toBe(true);
+      });
+
+      it("should affect the query param for throw expectation failures", function() {
+        var env = new j$.Env(),
+          container = document.createElement("div"),
+          throwingExceptionHandler = jasmine.createSpy('throwingExceptions'),
+          getContainer = function() {
+            return container;
+          },
+          reporter = new j$.HtmlReporter({
+            env: env,
+            getContainer: getContainer,
+            onThrowExpectationsClick: throwingExceptionHandler,
+            createElement: function() {
+              return document.createElement.apply(document, arguments);
+            },
+            createTextNode: function() {
+              return document.createTextNode.apply(document, arguments);
+            }
+          });
+
+        reporter.initialize();
+        reporter.jasmineDone({});
+
+        var throwingExpectationsUI = container.querySelector(".throw");
+        throwingExpectationsUI.click();
+
+        expect(throwingExceptionHandler).toHaveBeenCalled();
       });
     });
 
@@ -532,14 +647,17 @@ describe("New HtmlReporter", function() {
         reporter.initialize();
 
         reporter.jasmineStarted({ totalSpecsDefined: 1 });
-        reporter.specDone({
+        var specStatus = {
           id: 123,
           description: "with a spec",
           fullName: "A Suite with a spec",
           status: "pending",
           passedExpectations: [],
-          failedExpectations: []
-        });
+          failedExpectations: [],
+          pendingReason: "my custom pending reason"
+        };
+        reporter.specStarted(specStatus);
+        reporter.specDone(specStatus);
         reporter.jasmineDone({});
       });
 
@@ -554,6 +672,12 @@ describe("New HtmlReporter", function() {
 
         expect(specFailure.childNodes.length).toEqual(0);
       });
+
+      it("displays the custom pending reason", function() {
+        var pendingDetails = container.querySelector(".summary .pending");
+
+        expect(pendingDetails.innerHTML).toContain("my custom pending reason");
+      });
     });
 
     describe("and some tests fail", function() {
@@ -567,7 +691,8 @@ describe("New HtmlReporter", function() {
           env: env,
           getContainer: getContainer,
           createElement: function() { return document.createElement.apply(document, arguments); },
-          createTextNode: function() { return document.createTextNode.apply(document, arguments); }
+          createTextNode: function() { return document.createTextNode.apply(document, arguments); },
+          addToExistingQueryString: function(key, value) { return "?foo=bar&" + key + "=" + value; }
         });
         reporter.initialize();
 
@@ -614,7 +739,7 @@ describe("New HtmlReporter", function() {
 
         var specLink = specDiv.childNodes[0];
         expect(specLink.getAttribute("title")).toEqual("a suite with a failing spec");
-        expect(specLink.getAttribute("href")).toEqual("?spec=a%20suite%20with%20a%20failing%20spec");
+        expect(specLink.getAttribute("href")).toEqual("?foo=bar&spec=a suite with a failing spec");
 
         var message = failure.childNodes[1].childNodes[0];
         expect(message.getAttribute("class")).toEqual("result-message");

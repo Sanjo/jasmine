@@ -72,13 +72,6 @@ getJasmineRequireObj().DelayedFunctionScheduler = function() {
       }
     };
 
-    self.reset = function() {
-      currentTime = 0;
-      scheduledLookup = [];
-      scheduledFunctions = {};
-      delayedFnCount = 0;
-    };
-
     return self;
 
     function indexOfFirstToPass(array, testFn) {
@@ -114,6 +107,12 @@ getJasmineRequireObj().DelayedFunctionScheduler = function() {
         scheduledFn.runAtMillis + scheduledFn.millis);
     }
 
+    function forEachFunction(funcsToRun, callback) {
+      for (var i = 0; i < funcsToRun.length; ++i) {
+        callback(funcsToRun[i]);
+      }
+    }
+
     function runScheduledFunctions(endTime) {
       if (scheduledLookup.length === 0 || scheduledLookup[0] > endTime) {
         return;
@@ -125,15 +124,15 @@ getJasmineRequireObj().DelayedFunctionScheduler = function() {
         var funcsToRun = scheduledFunctions[currentTime];
         delete scheduledFunctions[currentTime];
 
-        for (var i = 0; i < funcsToRun.length; ++i) {
-          var funcToRun = funcsToRun[i];
-
+        forEachFunction(funcsToRun, function(funcToRun) {
           if (funcToRun.recurring) {
             reschedule(funcToRun);
           }
+        });
 
+        forEachFunction(funcsToRun, function(funcToRun) {
           funcToRun.funcToCall.apply(null, funcToRun.params || []);
-        }
+        });
       } while (scheduledLookup.length > 0 &&
               // checking first if we're out of time prevents setTimeout(0)
               // scheduled in a funcToRun from forcing an extra iteration

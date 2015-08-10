@@ -1,20 +1,17 @@
-getJasmineRequireObj().Suite = function() {
+getJasmineRequireObj().Suite = function(j$) {
   function Suite(attrs) {
     this.env = attrs.env;
     this.id = attrs.id;
     this.parentSuite = attrs.parentSuite;
     this.description = attrs.description;
-    this.onStart = attrs.onStart || function() {};
-    this.resultCallback = attrs.resultCallback || function() {};
-    this.clearStack = attrs.clearStack || function(fn) {fn();};
     this.expectationFactory = attrs.expectationFactory;
     this.expectationResultFactory = attrs.expectationResultFactory;
+    this.throwOnExpectationFailure = !!attrs.throwOnExpectationFailure;
 
     this.beforeFns = [];
     this.afterFns = [];
     this.beforeAllFns = [];
     this.afterAllFns = [];
-    this.queueRunner = attrs.queueRunner || function() {};
     this.disabled = false;
 
     this.children = [];
@@ -77,57 +74,17 @@ getJasmineRequireObj().Suite = function() {
     }
   };
 
-  Suite.prototype.execute = function(onComplete) {
-    var self = this;
-
-    this.onStart(this);
-
-    if (this.disabled) {
-      complete();
-      return;
-    }
-
-    var allFns = [];
-
-    for (var i = 0; i < this.children.length; i++) {
-      allFns.push(wrapChildAsAsync(this.children[i]));
-    }
-
-    if (this.isExecutable()) {
-      allFns = this.beforeAllFns.concat(allFns);
-      allFns = allFns.concat(this.afterAllFns);
-    }
-
-    this.queueRunner({
-      queueableFns: allFns,
-      onComplete: complete,
-      userContext: this.sharedUserContext(),
-      onException: function() { self.onException.apply(self, arguments); }
-    });
-
-    function complete() {
-      self.result.status = self.status();
-      self.resultCallback(self.result);
-
-      if (onComplete) {
-        onComplete();
-      }
-    }
-
-    function wrapChildAsAsync(child) {
-      return { fn: function(done) { child.execute(done); } };
-    }
+  Suite.prototype.isExecutable = function() {
+    return !this.disabled;
   };
 
-  Suite.prototype.isExecutable = function() {
-    var foundActive = false;
-    for(var i = 0; i < this.children.length; i++) {
-      if(this.children[i].isExecutable()) {
-        foundActive = true;
-        break;
-      }
-    }
-    return foundActive;
+  Suite.prototype.canBeReentered = function() {
+    return this.beforeAllFns.length === 0 && this.afterAllFns.length === 0;
+  };
+
+  Suite.prototype.getResult = function() {
+    this.result.status = this.status();
+    return this.result;
   };
 
   Suite.prototype.sharedUserContext = function() {
@@ -143,6 +100,10 @@ getJasmineRequireObj().Suite = function() {
   };
 
   Suite.prototype.onException = function() {
+    if (arguments[0] instanceof j$.errors.ExpectationFailed) {
+      return;
+    }
+
     if(isAfterAll(this.children)) {
       var data = {
         matcherName: '',
@@ -164,10 +125,17 @@ getJasmineRequireObj().Suite = function() {
     if(isAfterAll(this.children) && isFailure(arguments)){
       var data = arguments[1];
       this.result.failedExpectations.push(this.expectationResultFactory(data));
+      if(this.throwOnExpectationFailure) {
+        throw new j$.errors.ExpectationFailed();
+      }
     } else {
       for (var i = 0; i < this.children.length; i++) {
         var child = this.children[i];
-        child.addExpectationResult.apply(child, arguments);
+        try {
+          child.addExpectationResult.apply(child, arguments);
+        } catch(e) {
+          // keep going
+        }
       }
     }
   };

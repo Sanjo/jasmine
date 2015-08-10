@@ -11,6 +11,8 @@ jasmineRequire.HtmlReporter = function(j$) {
       createElement = options.createElement,
       createTextNode = options.createTextNode,
       onRaiseExceptionsClick = options.onRaiseExceptionsClick || function() {},
+      onThrowExpectationsClick = options.onThrowExpectationsClick || function() {},
+      addToExistingQueryString = options.addToExistingQueryString || defaultQueryString,
       timer = options.timer || noopTimer,
       results = [],
       specsExecuted = 0,
@@ -115,22 +117,51 @@ jasmineRequire.HtmlReporter = function(j$) {
 
     this.jasmineDone = function() {
       var banner = find('.banner');
-      banner.appendChild(createDom('span', {className: 'duration'}, 'finished in ' + timer.elapsed() / 1000 + 's'));
-
       var alert = find('.alert');
+      alert.appendChild(createDom('span', {className: 'duration'}, 'finished in ' + timer.elapsed() / 1000 + 's'));
 
-      alert.appendChild(createDom('span', { className: 'exceptions' },
-        createDom('label', { className: 'label', 'for': 'raise-exceptions' }, 'raise exceptions'),
-        createDom('input', {
-          className: 'raise',
-          id: 'raise-exceptions',
-          type: 'checkbox'
-        })
-      ));
-      var checkbox = find('#raise-exceptions');
+      banner.appendChild(
+        createDom('div', { className: 'run-options' },
+          createDom('span', { className: 'trigger' }, 'Options'),
+          createDom('div', { className: 'payload' },
+            createDom('div', { className: 'exceptions' },
+              createDom('input', {
+                className: 'raise',
+                id: 'raise-exceptions',
+                type: 'checkbox'
+              }),
+              createDom('label', { className: 'label', 'for': 'raise-exceptions' }, 'raise exceptions')),
+            createDom('div', { className: 'throw-failures' },
+              createDom('input', {
+                className: 'throw',
+                id: 'throw-failures',
+                type: 'checkbox'
+              }),
+              createDom('label', { className: 'label', 'for': 'throw-failures' }, 'stop spec on expectation failure'))
+          )
+        ));
 
-      checkbox.checked = !env.catchingExceptions();
-      checkbox.onclick = onRaiseExceptionsClick;
+      var raiseCheckbox = find('#raise-exceptions');
+
+      raiseCheckbox.checked = !env.catchingExceptions();
+      raiseCheckbox.onclick = onRaiseExceptionsClick;
+
+      var throwCheckbox = find('#throw-failures');
+      throwCheckbox.checked = env.throwingExpectationFailures();
+      throwCheckbox.onclick = onThrowExpectationsClick;
+
+      var optionsMenu = find('.run-options'),
+          optionsTrigger = optionsMenu.querySelector('.trigger'),
+          optionsPayload = optionsMenu.querySelector('.payload'),
+          isOpen = /\bopen\b/;
+
+      optionsTrigger.onclick = function() {
+        if (isOpen.test(optionsPayload.className)) {
+          optionsPayload.className = optionsPayload.className.replace(isOpen, '');
+        } else {
+          optionsPayload.className += ' open';
+        }
+      };
 
       if (specsExecuted < totalSpecsDefined) {
         var skippedMessage = 'Ran ' + specsExecuted + ' of ' + totalSpecsDefined + ' specs - run all';
@@ -191,6 +222,9 @@ jasmineRequire.HtmlReporter = function(j$) {
             if(noExpectations(resultNode.result)) {
               specDescription = 'SPEC HAS NO EXPECTATIONS ' + specDescription;
             }
+            if(resultNode.result.status === 'pending' && resultNode.result.pendingReason !== '') {
+              specDescription = specDescription + ' PENDING WITH MESSAGE: ' + resultNode.result.pendingReason;
+            }
             specListNode.appendChild(
               createDom('li', {
                   className: resultNode.result.status,
@@ -238,7 +272,7 @@ jasmineRequire.HtmlReporter = function(j$) {
     function clearPrior() {
       // return the reporter
       var oldReporter = find('');
-      
+
       if(oldReporter) {
         getContainer().removeChild(oldReporter);
       }
@@ -277,7 +311,11 @@ jasmineRequire.HtmlReporter = function(j$) {
     }
 
     function specHref(result) {
-      return '?spec=' + encodeURIComponent(result.fullName);
+      return addToExistingQueryString('spec', result.fullName);
+    }
+
+    function defaultQueryString(key, value) {
+      return '?' + key + '=' + value;
     }
 
     function setMenuModeTo(mode) {

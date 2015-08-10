@@ -1,5 +1,5 @@
 getJasmineRequireObj().Clock = function() {
-  function Clock(global, delayedFunctionScheduler, mockDate) {
+  function Clock(global, delayedFunctionSchedulerFactory, mockDate) {
     var self = this,
       realTimingFunctions = {
         setTimeout: global.setTimeout,
@@ -14,24 +14,38 @@ getJasmineRequireObj().Clock = function() {
         clearInterval: clearInterval
       },
       installed = false,
+      delayedFunctionScheduler,
       timer;
 
 
     self.install = function() {
+      if(!originalTimingFunctionsIntact()) {
+        throw new Error('Jasmine Clock was unable to install over custom global timer functions. Is the clock already installed?');
+      }
       replace(global, fakeTimingFunctions);
       timer = fakeTimingFunctions;
+      delayedFunctionScheduler = delayedFunctionSchedulerFactory();
       installed = true;
 
       return self;
     };
 
     self.uninstall = function() {
-      delayedFunctionScheduler.reset();
+      delayedFunctionScheduler = null;
       mockDate.uninstall();
       replace(global, realTimingFunctions);
 
       timer = realTimingFunctions;
       installed = false;
+    };
+
+    self.withMock = function(closure) {
+      this.install();
+      try {
+        closure();
+      } finally {
+        this.uninstall();
+      }
     };
 
     self.mockDate = function(initialDate) {
@@ -76,6 +90,13 @@ getJasmineRequireObj().Clock = function() {
     };
 
     return self;
+
+    function originalTimingFunctionsIntact() {
+      return global.setTimeout === realTimingFunctions.setTimeout &&
+        global.clearTimeout === realTimingFunctions.clearTimeout &&
+        global.setInterval === realTimingFunctions.setInterval &&
+        global.clearInterval === realTimingFunctions.clearInterval;
+    }
 
     function legacyIE() {
       //if these methods are polyfilled, apply will be present

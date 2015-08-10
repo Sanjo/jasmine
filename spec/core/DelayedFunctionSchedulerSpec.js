@@ -113,47 +113,6 @@ describe("DelayedFunctionScheduler", function() {
     expect(fn).not.toHaveBeenCalled();
   });
 
-  it("reset removes scheduled functions", function() {
-    var scheduler = new j$.DelayedFunctionScheduler(),
-      fn = jasmine.createSpy('fn');
-
-    scheduler.scheduleFunction(fn, 0);
-
-    expect(fn).not.toHaveBeenCalled();
-
-    scheduler.reset();
-
-    scheduler.tick(0);
-
-    expect(fn).not.toHaveBeenCalled();
-  });
-
-  it("reset resets the returned ids", function() {
-    var scheduler = new j$.DelayedFunctionScheduler();
-    expect(scheduler.scheduleFunction(function() { }, 0)).toBe(1);
-    expect(scheduler.scheduleFunction(function() { }, 0, [], false, 123)).toBe(123);
-
-    scheduler.reset();
-    expect(scheduler.scheduleFunction(function() { }, 0)).toBe(1);
-    expect(scheduler.scheduleFunction(function() { }, 0, [], false, 123)).toBe(123);
-  });
-
-  it("reset resets the current tick time", function() {
-    var scheduler = new j$.DelayedFunctionScheduler(),
-      fn = jasmine.createSpy('fn');
-
-    expect(fn).not.toHaveBeenCalled();
-
-    scheduler.tick(15);
-    scheduler.reset();
-
-    scheduler.scheduleFunction(fn, 20, [], false, 1, 20);
-
-    scheduler.tick(5);
-
-    expect(fn).not.toHaveBeenCalled();
-  });
-
   it("executes recurring functions interleaved with regular functions in the correct order", function() {
     var scheduler = new j$.DelayedFunctionScheduler(),
       fn = jasmine.createSpy('fn'),
@@ -255,5 +214,42 @@ describe("DelayedFunctionScheduler", function() {
     scheduler.tick(10);
   });
 
+  it("removes functions during a tick that runs the function", function() {
+    var scheduler = new j$.DelayedFunctionScheduler(),
+      fn = jasmine.createSpy('fn'),
+      fnDelay = 10,
+      timeoutKey;
+
+    timeoutKey = scheduler.scheduleFunction(fn, fnDelay, [], true);
+    scheduler.scheduleFunction(function () {
+      scheduler.removeFunctionWithId(timeoutKey);
+    }, 2 * fnDelay);
+
+    expect(fn).not.toHaveBeenCalled();
+
+    scheduler.tick(3 * fnDelay);
+
+    expect(fn).toHaveBeenCalled();
+    expect(fn.calls.count()).toBe(2);
+  });
+
+  it("removes functions during the first tick that runs the function", function() {
+    var scheduler = new j$.DelayedFunctionScheduler(),
+      fn = jasmine.createSpy('fn'),
+      fnDelay = 10,
+      timeoutKey;
+
+    timeoutKey = scheduler.scheduleFunction(fn, fnDelay, [], true);
+    scheduler.scheduleFunction(function () {
+      scheduler.removeFunctionWithId(timeoutKey);
+    }, fnDelay);
+
+    expect(fn).not.toHaveBeenCalled();
+
+    scheduler.tick(3 * fnDelay);
+
+    expect(fn).toHaveBeenCalled();
+    expect(fn.calls.count()).toBe(1);
+  });
 });
 

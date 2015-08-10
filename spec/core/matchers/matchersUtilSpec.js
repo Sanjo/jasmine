@@ -58,6 +58,16 @@ describe("matchersUtil", function() {
       expect(j$.matchersUtil.equals([1, 2], [1, 2, 3])).toBe(false);
     });
 
+    it("fails for Arrays whose contents are equivalent, but have differing properties", function() {
+      var one = [1,2,3],
+          two = [1,2,3];
+
+      one.foo = 'bar';
+      two.foo = 'baz';
+
+      expect(j$.matchersUtil.equals(one, two)).toBe(false);
+    });
+
     it("passes for Errors that are the same type and have the same message", function() {
       expect(j$.matchersUtil.equals(new Error("foo"), new Error("foo"))).toBe(true);
     });
@@ -122,6 +132,72 @@ describe("matchersUtil", function() {
       expect(j$.matchersUtil.equals(a,b)).toBe(true);
     });
 
+    it("passes for equivalent DOM nodes", function() {
+      if (typeof document === 'undefined') {
+        return;
+      }
+      var a = document.createElement("div");
+      a.setAttribute("test-attr", "attr-value")
+      a.appendChild(document.createTextNode('test'));
+
+      var b = document.createElement("div");
+      b.setAttribute("test-attr", "attr-value")
+      b.appendChild(document.createTextNode('test'));
+
+      expect(j$.matchersUtil.equals(a,b)).toBe(true);
+    });
+
+    it("fails for DOM nodes with different attributes or child nodes", function() {
+      if (typeof document === 'undefined') {
+        return;
+      }
+      var a = document.createElement("div");
+      a.setAttribute("test-attr", "attr-value")
+      a.appendChild(document.createTextNode('test'));
+
+      var b = document.createElement("div");
+      b.setAttribute("test-attr", "attr-value2")
+      b.appendChild(document.createTextNode('test'));
+
+      expect(j$.matchersUtil.equals(a,b)).toBe(false);
+
+      b.setAttribute("test-attr", "attr-value");
+      expect(j$.matchersUtil.equals(a,b)).toBe(true);
+
+      b.appendChild(document.createTextNode('2'));
+      expect(j$.matchersUtil.equals(a,b)).toBe(false);
+
+      a.appendChild(document.createTextNode('2'));
+      expect(j$.matchersUtil.equals(a,b)).toBe(true);
+    });
+
+    it("passes for equivalent objects from different vm contexts", function() {
+      if (typeof require !== 'function') {
+        return;
+      }
+      var vm = require('vm');
+      var sandbox = {
+        obj: null
+      };
+      vm.runInNewContext('obj = {a: 1, b: 2}', sandbox);
+
+      expect(j$.matchersUtil.equals(sandbox.obj, {a: 1, b: 2})).toBe(true);
+    });
+
+    it("passes for equivalent arrays from different vm contexts", function() {
+      if (typeof require !== 'function') {
+        return;
+      }
+
+      var vm = require('vm');
+      var sandbox = {
+        arr: null
+      };
+      vm.runInNewContext('arr = [1, 2]', sandbox);
+
+      expect(j$.matchersUtil.equals(sandbox.arr, [1, 2])).toBe(true);
+    });
+
     it("passes when Any is used", function() {
       var number = 3,
         anyNumber = new j$.Any(Number);
@@ -142,9 +218,31 @@ describe("matchersUtil", function() {
       var obj = {
         foo: 3,
         bar: 7
-      };
+      },
+      containing = new j$.ObjectContaining({foo: 3});
 
-      expect(j$.matchersUtil.equals(obj, new j$.ObjectContaining({foo: 3}))).toBe(true);
+      expect(j$.matchersUtil.equals(obj, containing)).toBe(true);
+      expect(j$.matchersUtil.equals(containing, obj)).toBe(true);
+    });
+
+    it("passes when an asymmetric equality tester returns true", function() {
+      var tester = { asymmetricMatch: function(other) { return true; } };
+
+      expect(j$.matchersUtil.equals(false, tester)).toBe(true);
+      expect(j$.matchersUtil.equals(tester, false)).toBe(true);
+    });
+
+    it("fails when an asymmetric equality tester returns false", function() {
+      var tester = { asymmetricMatch: function(other) { return false; } };
+
+      expect(j$.matchersUtil.equals(true, tester)).toBe(false);
+      expect(j$.matchersUtil.equals(tester, true)).toBe(false);
+    });
+
+    it("passes when ArrayContaining is used", function() {
+      var arr = ["foo", "bar"];
+
+      expect(j$.matchersUtil.equals(arr, new j$.ArrayContaining(["bar"]))).toBe(true);
     });
 
     it("passes when a custom equality matcher returns true", function() {
@@ -169,6 +267,45 @@ describe("matchersUtil", function() {
       var tester = function(a, b) { return false; };
 
       expect(j$.matchersUtil.equals(1, 1, [tester])).toBe(false);
+    });
+
+    it("passes for an asymmetric equality tester that returns true when a custom equality tester return false", function() {
+      var asymmetricTester = { asymmetricMatch: function(other) { return true; } },
+          symmetricTester = function(a, b) { return false; };
+
+      expect(j$.matchersUtil.equals(asymmetricTester, true, [symmetricTester])).toBe(true);
+      expect(j$.matchersUtil.equals(true, asymmetricTester, [symmetricTester])).toBe(true);
+    });
+
+    it("passes when an Any is compared to an Any that checks for the same type", function() {
+      var any1 = new j$.Any(Function),
+          any2 = new j$.Any(Function);
+
+      expect(j$.matchersUtil.equals(any1, any2)).toBe(true);
+    });
+
+    it("passes for null prototype objects with same properties", function () {
+      if (jasmine.getEnv().ieVersion < 9) { return; }
+
+      var objA = Object.create(null),
+          objB = Object.create(null);
+
+      objA.name = 'test';
+      objB.name = 'test';
+
+      expect(j$.matchersUtil.equals(objA, objB)).toBe(true);
+    });
+
+    it("fails for null prototype objects with different properties", function () {
+      if (jasmine.getEnv().ieVersion < 9) { return; }
+
+      var objA = Object.create(null),
+          objB = Object.create(null);
+
+      objA.name = 'test';
+      objB.test = 'name';
+
+      expect(j$.matchersUtil.equals(objA, objB)).toBe(false);
     });
   });
 

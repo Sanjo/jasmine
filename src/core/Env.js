@@ -11,7 +11,7 @@ getJasmineRequireObj().Env = function(j$) {
 
     var realSetTimeout = options.setTimeout || j$.getGlobal().setTimeout;
     var realClearTimeout = options.clearTimeout || j$.getGlobal().clearTimeout;
-    this.clock = new j$.Clock(global, new j$.DelayedFunctionScheduler(), new j$.MockDate(global));
+    this.clock = new j$.Clock(global, function () { return new j$.DelayedFunctionScheduler(); }, new j$.MockDate(global));
 
     var runnableLookupTable = {};
     var runnableResources = {};
@@ -19,6 +19,7 @@ getJasmineRequireObj().Env = function(j$) {
     var currentSpec = null;
     var currentlyExecutingSuites = [];
     var currentDeclarationSuite = null;
+    var throwOnExpectationFailure = false;
 
     var currentSuite = function() {
       return currentlyExecutingSuites[currentlyExecutingSuites.length - 1];
@@ -100,27 +101,21 @@ getJasmineRequireObj().Env = function(j$) {
         delete runnableResources[id];
     };
 
-    var beforeAndAfterFns = function(suite, runnablesExplictlySet) {
+    var beforeAndAfterFns = function(suite) {
       return function() {
         var befores = [],
-          afters = [],
-          beforeAlls = [],
-          afterAlls = [];
+          afters = [];
 
         while(suite) {
           befores = befores.concat(suite.beforeFns);
           afters = afters.concat(suite.afterFns);
 
-          if (runnablesExplictlySet()) {
-            beforeAlls = beforeAlls.concat(suite.beforeAllFns);
-            afterAlls = afterAlls.concat(suite.afterAllFns);
-          }
-
           suite = suite.parentSuite;
         }
+
         return {
-          befores: beforeAlls.reverse().concat(befores.reverse()),
-          afters: afters.concat(afterAlls)
+          befores: befores.reverse(),
+          afters: afters
         };
       };
     };
@@ -166,10 +161,18 @@ getJasmineRequireObj().Env = function(j$) {
       return j$.Spec.isPendingSpecException(e) || catchExceptions;
     };
 
+    this.throwOnExpectationFailure = function(value) {
+      throwOnExpectationFailure = !!value;
+    };
+
+    this.throwingExpectationFailures = function() {
+      return throwOnExpectationFailure;
+    };
+
     var queueRunnerFactory = function(options) {
       options.catchException = catchException;
       options.clearStack = options.clearStack || clearStack;
-      options.timer = {setTimeout: realSetTimeout, clearTimeout: realClearTimeout};
+      options.timeout = {setTimeout: realSetTimeout, clearTimeout: realClearTimeout};
       options.fail = self.fail;
 
       new j$.QueueRunner(options).execute();
@@ -190,26 +193,40 @@ getJasmineRequireObj().Env = function(j$) {
     };
 
     this.execute = function(runnablesToRun) {
-      if(runnablesToRun) {
-        runnablesExplictlySet = true;
-      } else if (focusedRunnables.length) {
-        runnablesExplictlySet = true;
-        runnablesToRun = focusedRunnables;
-      } else {
-        runnablesToRun = [topSuite.id];
+      if(!runnablesToRun) {
+        if (focusedRunnables.length) {
+          runnablesToRun = focusedRunnables;
+        } else {
+          runnablesToRun = [topSuite.id];
+        }
       }
+      var processor = new j$.TreeProcessor({
+        tree: topSuite,
+        runnableIds: runnablesToRun,
+        queueRunnerFactory: queueRunnerFactory,
+        nodeStart: function(suite) {
+          currentlyExecutingSuites.push(suite);
+          defaultResourcesForRunnable(suite.id, suite.parentSuite.id);
+          reporter.suiteStarted(suite.result);
+        },
+        nodeComplete: function(suite, result) {
+          if (!suite.disabled) {
+            clearResourcesForRunnable(suite.id);
+          }
+          currentlyExecutingSuites.pop();
+          reporter.suiteDone(result);
+        }
+      });
 
-      var allFns = [];
-      for(var i = 0; i < runnablesToRun.length; i++) {
-        var runnable = runnableLookupTable[runnablesToRun[i]];
-        allFns.push((function(runnable) { return { fn: function(done) { runnable.execute(done); } }; })(runnable));
+      if(!processor.processTree().valid) {
+        throw new Error('Invalid order: would cause a beforeAll or afterAll to be run multiple times');
       }
 
       reporter.jasmineStarted({
         totalSpecsDefined: totalSpecsDefined
       });
 
-      queueRunnerFactory({queueableFns: allFns, onComplete: reporter.jasmineDone});
+      processor.execute(reporter.jasmineDone);
     };
 
     this.addReporter = function(reporterToAdd) {
@@ -233,27 +250,13 @@ getJasmineRequireObj().Env = function(j$) {
         id: getNextSuiteId(),
         description: description,
         parentSuite: currentDeclarationSuite,
-        queueRunner: queueRunnerFactory,
-        onStart: suiteStarted,
         expectationFactory: expectationFactory,
         expectationResultFactory: expectationResultFactory,
-        resultCallback: function(attrs) {
-          if (!suite.disabled) {
-            clearResourcesForRunnable(suite.id);
-            currentlyExecutingSuites.pop();
-          }
-          reporter.suiteDone(attrs);
-        }
+        throwOnExpectationFailure: throwOnExpectationFailure
       });
 
       runnableLookupTable[suite.id] = suite;
       return suite;
-
-      function suiteStarted(suite) {
-        currentlyExecutingSuites.push(suite);
-        defaultResourcesForRunnable(suite.id, suite.parentSuite.id);
-        reporter.suiteStarted(suite.result);
-      }
     };
 
     this.describe = function(description, specDefinitions) {
@@ -325,17 +328,11 @@ getJasmineRequireObj().Env = function(j$) {
       }
     }
 
-    var runnablesExplictlySet = false;
-
-    var runnablesExplictlySetGetter = function(){
-      return runnablesExplictlySet;
-    };
-
     var specFactory = function(description, fn, suite, timeout) {
       totalSpecsDefined++;
       var spec = new j$.Spec({
         id: getNextSpecId(),
-        beforeAndAfterFns: beforeAndAfterFns(suite, runnablesExplictlySetGetter),
+        beforeAndAfterFns: beforeAndAfterFns(suite),
         expectationFactory: expectationFactory,
         resultCallback: specResultCallback,
         getSpecName: function(spec) {
@@ -349,7 +346,8 @@ getJasmineRequireObj().Env = function(j$) {
         queueableFn: {
           fn: fn,
           timeout: function() { return timeout || j$.DEFAULT_TIMEOUT_INTERVAL; }
-        }
+        },
+        throwOnExpectationFailure: throwOnExpectationFailure
       });
 
       runnableLookupTable[spec.id] = spec;
@@ -429,8 +427,12 @@ getJasmineRequireObj().Env = function(j$) {
       });
     };
 
-    this.pending = function() {
-      throw j$.Spec.pendingSpecExceptionMessage;
+    this.pending = function(message) {
+      var fullMessage = j$.Spec.pendingSpecExceptionMessage;
+      if(message) {
+        fullMessage += message;
+      }
+      throw fullMessage;
     };
 
     this.fail = function(error) {
@@ -445,7 +447,8 @@ getJasmineRequireObj().Env = function(j$) {
         passed: false,
         expected: '',
         actual: '',
-        message: message
+        message: message,
+        error: error && error.message ? error : null
       });
     };
   }

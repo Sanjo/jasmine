@@ -1,10 +1,13 @@
-getJasmineRequireObj = (function (jasmineGlobal) {
+var getJasmineRequireObj = (function (jasmineGlobal) {
   var jasmineRequire;
 
   if (typeof module !== 'undefined' && module.exports) {
     jasmineGlobal = global;
     jasmineRequire = exports;
   } else {
+    if (typeof window !== 'undefined' && typeof window.toString === 'function' && window.toString() === '[object GjsGlobal]') {
+      jasmineGlobal = window;
+    }
     jasmineRequire = jasmineGlobal.jasmineRequire = jasmineGlobal.jasmineRequire || {};
   }
 
@@ -17,7 +20,9 @@ getJasmineRequireObj = (function (jasmineGlobal) {
 
     jRequire.base(j$, jasmineGlobal);
     j$.util = jRequire.util();
-    j$.Any = jRequire.Any();
+    j$.errors = jRequire.errors();
+    j$.Any = jRequire.Any(j$);
+    j$.Anything = jRequire.Anything(j$);
     j$.CallTracker = jRequire.CallTracker();
     j$.MockDate = jRequire.MockDate();
     j$.Clock = jRequire.Clock();
@@ -29,14 +34,17 @@ getJasmineRequireObj = (function (jasmineGlobal) {
     j$.JsApiReporter = jRequire.JsApiReporter();
     j$.matchersUtil = jRequire.matchersUtil(j$);
     j$.ObjectContaining = jRequire.ObjectContaining(j$);
+    j$.ArrayContaining = jRequire.ArrayContaining(j$);
     j$.pp = jRequire.pp(j$);
     j$.QueueRunner = jRequire.QueueRunner(j$);
     j$.ReportDispatcher = jRequire.ReportDispatcher();
     j$.Spec = jRequire.Spec(j$);
     j$.SpyRegistry = jRequire.SpyRegistry(j$);
     j$.SpyStrategy = jRequire.SpyStrategy();
-    j$.Suite = jRequire.Suite();
+    j$.StringMatching = jRequire.StringMatching(j$);
+    j$.Suite = jRequire.Suite(j$);
     j$.Timer = jRequire.Timer();
+    j$.TreeProcessor = jRequire.TreeProcessor();
     j$.version = jRequire.version();
 
     j$.matchers = jRequire.requireMatchers(jRequire, j$);
