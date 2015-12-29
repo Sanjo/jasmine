@@ -2,7 +2,11 @@ var getJasmineRequireObj = (function (jasmineGlobal) {
   var jasmineRequire;
 
   if (typeof module !== 'undefined' && module.exports) {
-    jasmineGlobal = global;
+    if (typeof global !== 'undefined') {
+      jasmineGlobal = global;
+    } else {
+      jasmineGlobal = {};
+    }
     jasmineRequire = exports;
   } else {
     if (typeof window !== 'undefined' && typeof window.toString === 'function' && window.toString() === '[object GjsGlobal]') {
@@ -46,6 +50,7 @@ var getJasmineRequireObj = (function (jasmineGlobal) {
     j$.Timer = jRequire.Timer();
     j$.TreeProcessor = jRequire.TreeProcessor();
     j$.version = jRequire.version();
+    j$.Order = jRequire.Order();
 
     j$.matchers = jRequire.requireMatchers(jRequire, j$);
 

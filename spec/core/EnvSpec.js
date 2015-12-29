@@ -26,6 +26,15 @@ describe("Env", function() {
     });
   });
 
+  describe('#describe', function () {
+    var spec = function(done){};
+    it("throws the error", function() {
+      expect(function() {
+        env.describe('done method', spec);
+      }).toThrow(new Error('describe does not expect a done parameter'));
+    });
+  });
+
   it('can configure specs to throw errors on expectation failures', function() {
     env.throwOnExpectationFailure(true);
 
@@ -44,5 +53,16 @@ describe("Env", function() {
     expect(j$.Suite).toHaveBeenCalledWith(jasmine.objectContaining({
       throwOnExpectationFailure: true
     }));
+  });
+
+  describe('#xit', function() {
+    it('calls spec.pend with "Temporarily disabled with xit"', function() {
+      var pendSpy = jasmine.createSpy();
+      spyOn(env, 'it').and.returnValue({
+        pend: pendSpy
+      });
+      env.xit();
+      expect(pendSpy).toHaveBeenCalledWith('Temporarily disabled with xit');
+    });
   });
 });
